@@ -18,25 +18,11 @@
         android:layout_centerVertical="true"
         android:text="text"/>
     <TextView
-        android:id="@+id/version"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_above="@id/compass"
-        android:text="version"/>
-    <TextView
-        android:id="@+id/direction"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_below="@id/compass"
-        android:text="direction"/>
-    <TextView
         android:id="@+id/distance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@id/direction"
+        android:layout_below="@id/compass"
         android:text="heart rate"/>
     <TextView
         android:id="@+id/heart_rate"
@@ -45,5 +31,12 @@
         android:layout_centerHorizontal="true"
         android:layout_below="@id/distance"
         android:text="heart rate"/>
+    <TextView
+        android:id="@+id/version"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:layout_above="@id/compass"
+        android:text="version"/>
 
 </RelativeLayout>

@@ -34,16 +34,16 @@ public class MainActivity extends FragmentActivity implements
 
     private GestureDetectorCompat mDetector;
     private SensorManager mSensorManager;
+    private UpdateDirectionDial mUpdateDirectionDial;
+    private TextView mTarget;
     private TextView mCompassText;
-    private TextView mVersion;
-    private TextView mDirectionText;
     private TextView mDistanceText;
     private TextView mHRText;
     private float[] mGravData;
     private float[] mMagData;
     private float[] mHeartRate;
     private float mCompassBearing;
-    private float mPOIBearing;
+    private float mTargetBearing;
     private int mWidth;
     private int mHeight;
 
@@ -69,15 +69,13 @@ public class MainActivity extends FragmentActivity implements
                 mHeight = size.y;
                 Log.i(TAG, "width=" + mWidth + ", height=" + mHeight);
 
-                mVersion = (TextView) stub.findViewById(R.id.version);
+                mTarget = (TextView) stub.findViewById(R.id.version);
                 mCompassText = (TextView) stub.findViewById(R.id.compass);
-                mDirectionText = (TextView) stub.findViewById(R.id.direction);
                 mDistanceText = (TextView) stub.findViewById(R.id.distance);
                 mHRText = (TextView) stub.findViewById(R.id.heart_rate);
 
-                mVersion.setText(Common.VERSION);
-                mCompassText.setText("Bearing(C) NA");
-                mDirectionText.setText("Bearing(M) NA");
+                mTarget.setText(Common.VERSION);
+                mCompassText.setText("Compass NA");
                 mDistanceText.setText("Distance NA");
                 mHRText.setText("HR NA");
 
@@ -87,8 +85,8 @@ public class MainActivity extends FragmentActivity implements
                 // register sensor
                 registerSensor();
 
-                UpdateDirectionDial rotateDirectionDial= new UpdateDirectionDial();
-                new Thread(rotateDirectionDial).start();
+                mUpdateDirectionDial = new UpdateDirectionDial();
+                new Thread(mUpdateDirectionDial).start();
             }
         });
         stub.setOnTouchListener(new View.OnTouchListener() {
@@ -101,7 +99,7 @@ public class MainActivity extends FragmentActivity implements
         });
         // Initialize location data
         mCompassBearing = 0;
-        mPOIBearing = 0;
+        mTargetBearing = 0;
 
         // Register the local broadcast receiver
         IntentFilter messageFilter = new IntentFilter(Intent.ACTION_SEND);
@@ -163,13 +161,7 @@ public class MainActivity extends FragmentActivity implements
                 break;
             case Sensor.TYPE_HEART_RATE:
                 mHeartRate = event.values;
-                updateHeartRate("Sensor.TYPE_HEART_RATE");
-//            case 65536:
-//                mHeartRate = event.values;
-//                updateHeartRate("Gesture Sensor");
-//            case 65538:
-//                mHeartRate = event.values;
-//                updateHeartRate("Wellness Passive Sensor");
+                updateHeartRate();
             default:
                 break;
         }
@@ -197,12 +189,6 @@ public class MainActivity extends FragmentActivity implements
         Log.i(TAG, "Registering Sensor.TYPE_HEART_RATE");
         Sensor heartSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
         mSensorManager.registerListener(this, heartSensor, SensorManager.SENSOR_DELAY_NORMAL);
-//        Log.i(TAG, "Registering Gesture Sensor");
-//        Sensor gestureSensor = mSensorManager.getDefaultSensor(65536);
-//        mSensorManager.registerListener(this, gestureSensor, SensorManager.SENSOR_DELAY_NORMAL);
-//        Log.i(TAG, "Registering Wellness Passive Sensor");
-//        Sensor wellnessSensor = mSensorManager.getDefaultSensor(65538);
-//        mSensorManager.registerListener(this, wellnessSensor, SensorManager.SENSOR_DELAY_NORMAL);
     }
     private void setDirectionDialFragment()
     {
@@ -215,6 +201,8 @@ public class MainActivity extends FragmentActivity implements
     }
     private void updateCompassData()
     {
+        StringBuilder sb = new StringBuilder();
+
         if (mGravData != null && mMagData != null)
         {
             float R[] = new float[9];
@@ -226,38 +214,32 @@ public class MainActivity extends FragmentActivity implements
                 SensorManager.getOrientation(R, orientation);
                 float azimuthInRadians = orientation[0];
                 float azimuthInDegrees = (float)(Math.toDegrees(azimuthInRadians)+360)%360;
-                mCompassText.setText("Bearing(C)=" + azimuthInDegrees);
+                sb.append(azimuthInDegrees);
+                sb.append("\u00B0");
                 mCompassBearing = azimuthInDegrees;
             }
         }
-        else if (mGravData != null)
+        else if (mGravData == null)
         {
-            StringBuilder sb = new StringBuilder();
-            sb.append("Sensor.TYPE_ACCELEROMETER");
-            sb.append("\nx=");
-            sb.append(mGravData[0]);
-            sb.append("\ny=");
-            sb.append(mGravData[1]);
-            sb.append("\nz=");
-            sb.append(mGravData[2]);
+            sb.append("ACCELEROMETER NA");
+        }
+        else if (mMagData == null)
+        {
+            sb.append("MAGNETIC FIELD NA");
+        }
 
+        if (mCompassText != null && sb.toString() != "")
+        {
             mCompassText.setText(sb.toString());
         }
     }
-    private void updateHeartRate(String sensorType)
+    private void updateHeartRate()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.append(sensorType);
-        sb.append(" x=");
-        sb.append(mHeartRate[0]);
-        sb.append(", y=");
-        sb.append(mHeartRate[1]);
-        sb.append(", z=");
-        sb.append(mHeartRate[2]);
-
-        Log.i(TAG, sb.toString());
         if (mHRText != null)
         {
+            StringBuilder sb = new StringBuilder();
+            sb.append(mHeartRate[0]);
+            sb.append(" bpm");
             mHRText.setText(sb.toString());
         }
     }
@@ -274,23 +256,31 @@ public class MainActivity extends FragmentActivity implements
             else if (message.equals(DataLayerListenerService.PATH_BEARING))
             {
                 Log.i("myTag", "Bearing=" + data);
-                mPOIBearing = Float.valueOf(data);
-                mDirectionText.setText("Bearing(M)=" + data);
+                mTargetBearing = Float.valueOf(data);
             }
         }
     }
 
     private class UpdateDirectionDial implements Runnable
     {
+        private boolean mIsEnabled;
+
+        public void stop()
+        {
+            mIsEnabled = false;
+        }
+
         @Override
-        public void run() {
+        public void run()
+        {
             float lastDegree = 0;
             float newDegree = 0;
+            mIsEnabled = true;
 
-            while(true)
+            while(mIsEnabled)
             {
                 // compute POI degree relative to Compass
-                newDegree = mPOIBearing - mCompassBearing;
+                newDegree = mTargetBearing - mCompassBearing;
                 if (mCompassBearing < -360)
                 {
                     newDegree += 360;
