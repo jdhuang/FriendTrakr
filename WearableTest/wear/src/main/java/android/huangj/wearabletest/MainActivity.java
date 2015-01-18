@@ -1,6 +1,5 @@
 package android.huangj.wearabletest;
 
-import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -12,32 +11,34 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.view.MotionEventCompat;
+import android.support.v4.view.GestureDetectorCompat;
 import android.support.wearable.view.WatchViewStub;
 import android.util.Log;
 import android.view.Display;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.View;
 import android.view.WindowManager;
-import android.view.animation.RotateAnimation;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.util.List;
 
-public class MainActivity extends Activity implements SensorEventListener {
-    public final static String TAG = "wearable::MainActivity";
+public class MainActivity extends FragmentActivity implements
+        SensorEventListener, GestureDetector.OnGestureListener {
+    public final static String TAG = "MainActivity";
     public final static String TAG_TOUCH = "OnTouchEvent";
 
-    public final static String VERSION = "Version 0.0.10\n";
-
+    private GestureDetectorCompat mDetector;
     private SensorManager mSensorManager;
-    private TextView mTextView;
+    private TextView mCompassText;
     private TextView mVersion;
-    private TextView mBearingText;
+    private TextView mDirectionText;
     private TextView mDistanceText;
     private TextView mHRText;
-    private ImageView mDirectionDial;
     private float[] mGravData;
     private float[] mMagData;
     private float[] mHeartRate;
@@ -69,22 +70,35 @@ public class MainActivity extends Activity implements SensorEventListener {
                 Log.i(TAG, "width=" + mWidth + ", height=" + mHeight);
 
                 mVersion = (TextView) stub.findViewById(R.id.version);
-                mTextView = (TextView) stub.findViewById(R.id.text);
-                mBearingText = (TextView) stub.findViewById(R.id.bearing);
+                mCompassText = (TextView) stub.findViewById(R.id.compass);
+                mDirectionText = (TextView) stub.findViewById(R.id.direction);
                 mDistanceText = (TextView) stub.findViewById(R.id.distance);
                 mHRText = (TextView) stub.findViewById(R.id.heart_rate);
-                mDirectionDial = (ImageView) stub.findViewById(R.id.directionDial);
 
-                mVersion.setText(VERSION);
-                mBearingText.setText("Bearing(M) NA");
+                mVersion.setText(Common.VERSION);
+                mCompassText.setText("Bearing(C) NA");
+                mDirectionText.setText("Bearing(M) NA");
                 mDistanceText.setText("Distance NA");
                 mHRText.setText("HR NA");
+
+                // set direction dial fragment
+                setDirectionDialFragment();
+
+                // register sensor
+                registerSensor();
 
                 UpdateDirectionDial rotateDirectionDial= new UpdateDirectionDial();
                 new Thread(rotateDirectionDial).start();
             }
         });
-
+        stub.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                Log.i(TAG, "onTouchEvent");
+                mDetector.onTouchEvent(event);
+                return false;
+            }
+        });
         // Initialize location data
         mCompassBearing = 0;
         mPOIBearing = 0;
@@ -94,24 +108,44 @@ public class MainActivity extends Activity implements SensorEventListener {
         MessageReceiver messageReceiver = new MessageReceiver();
         LocalBroadcastManager.getInstance(this).registerReceiver(messageReceiver, messageFilter);
 
-        // Get SensorManager
-        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        List<Sensor> sensorList = mSensorManager.getSensorList(Sensor.TYPE_ALL);
-        // Get list of available sensors
-        for (Sensor sensor : sensorList)
-        {
-            Log.i(TAG, sensor.toString());
-        }
-        // Register sensor
-        Log.i(TAG, "Registering Sensor.TYPE_ACCELEROMETER");
-        Sensor accSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-        mSensorManager.registerListener(this, accSensor, SensorManager.SENSOR_DELAY_NORMAL);
-        Log.i(TAG, "Registering Sensor.TYPE_MAGNETIC_FIELD");
-        Sensor magSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-        mSensorManager.registerListener(this, magSensor, SensorManager.SENSOR_DELAY_NORMAL);
-        Log.i(TAG, "Registering Sensor.TYPE_HEART_RATE");
-        Sensor heartSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
-        mSensorManager.registerListener(this, heartSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        // Instantiate the gesture detector with the
+        // application context and an implementation of
+        // GestureDetector.OnGestureListener
+        mDetector = new GestureDetectorCompat(this, this);
+    }
+
+    @Override
+    public boolean onSingleTapUp(MotionEvent event) {
+        Log.i(TAG, "onSingleTapUp: " + event.toString());
+        return true;
+    }
+
+    @Override
+    public void onShowPress(MotionEvent event) {
+        Log.i(TAG, "onShowPress: " + event.toString());
+    }
+
+    @Override
+    public void onLongPress(MotionEvent event) {
+        Log.i(TAG, "onLongPress: " + event.toString());
+    }
+
+    @Override
+    public boolean onFling(MotionEvent event1, MotionEvent event2, float velocityX, float velocityY) {
+        Log.i(TAG, "onFling: " + event1.toString() + event2.toString());
+        return true;
+    }
+
+    @Override
+    public boolean onScroll(MotionEvent event1, MotionEvent event2, float distanceX, float distanceY) {
+        Log.i(TAG, "onScroll: " + event1.toString() + event2.toString());
+        return true;
+    }
+
+    @Override
+    public boolean onDown(MotionEvent event) {
+        Log.i(TAG,"onDown: " + event.toString());
+        return true;
     }
 
     @Override
@@ -129,12 +163,55 @@ public class MainActivity extends Activity implements SensorEventListener {
                 break;
             case Sensor.TYPE_HEART_RATE:
                 mHeartRate = event.values;
-                debugHeartRate();
+                updateHeartRate("Sensor.TYPE_HEART_RATE");
+//            case 65536:
+//                mHeartRate = event.values;
+//                updateHeartRate("Gesture Sensor");
+//            case 65538:
+//                mHeartRate = event.values;
+//                updateHeartRate("Wellness Passive Sensor");
             default:
                 break;
         }
 
         updateCompassData();
+    }
+    private void registerSensor()
+    {
+        // Get SensorManager
+        mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        // Get list of available sensors
+        List<Sensor> sensorList = mSensorManager.getSensorList(Sensor.TYPE_ALL);
+        for (Sensor sensor : sensorList)
+        {
+            Log.i(TAG, sensor.toString());
+        }
+
+        // Register sensor
+        Log.i(TAG, "Registering Sensor.TYPE_ACCELEROMETER");
+        Sensor accSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        mSensorManager.registerListener(this, accSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        Log.i(TAG, "Registering Sensor.TYPE_MAGNETIC_FIELD");
+        Sensor magSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+        mSensorManager.registerListener(this, magSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        Log.i(TAG, "Registering Sensor.TYPE_HEART_RATE");
+        Sensor heartSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE);
+        mSensorManager.registerListener(this, heartSensor, SensorManager.SENSOR_DELAY_NORMAL);
+//        Log.i(TAG, "Registering Gesture Sensor");
+//        Sensor gestureSensor = mSensorManager.getDefaultSensor(65536);
+//        mSensorManager.registerListener(this, gestureSensor, SensorManager.SENSOR_DELAY_NORMAL);
+//        Log.i(TAG, "Registering Wellness Passive Sensor");
+//        Sensor wellnessSensor = mSensorManager.getDefaultSensor(65538);
+//        mSensorManager.registerListener(this, wellnessSensor, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+    private void setDirectionDialFragment()
+    {
+        DirectionDialFragment directionDialFragment = new DirectionDialFragment();
+
+        FragmentTransaction transaction = getSupportFragmentManager()
+                .beginTransaction();
+        transaction.replace(R.id.direction_dial_fragment, directionDialFragment);
+        transaction.commit();
     }
     private void updateCompassData()
     {
@@ -149,7 +226,7 @@ public class MainActivity extends Activity implements SensorEventListener {
                 SensorManager.getOrientation(R, orientation);
                 float azimuthInRadians = orientation[0];
                 float azimuthInDegrees = (float)(Math.toDegrees(azimuthInRadians)+360)%360;
-                mTextView.setText("Bearing(C)="+ azimuthInDegrees);
+                mCompassText.setText("Bearing(C)=" + azimuthInDegrees);
                 mCompassBearing = azimuthInDegrees;
             }
         }
@@ -164,22 +241,25 @@ public class MainActivity extends Activity implements SensorEventListener {
             sb.append("\nz=");
             sb.append(mGravData[2]);
 
-            mTextView.setText(sb.toString());
+            mCompassText.setText(sb.toString());
         }
     }
-    private void debugHeartRate()
+    private void updateHeartRate(String sensorType)
     {
         StringBuilder sb = new StringBuilder();
-        sb.append("Sensor.TYPE_HEART_RATE");
-        sb.append("\nx=");
+        sb.append(sensorType);
+        sb.append(" x=");
         sb.append(mHeartRate[0]);
-        sb.append("\ny=");
+        sb.append(", y=");
         sb.append(mHeartRate[1]);
-        sb.append("\nz=");
+        sb.append(", z=");
         sb.append(mHeartRate[2]);
 
         Log.i(TAG, sb.toString());
-        mHRText.setText(sb.toString());
+        if (mHRText != null)
+        {
+            mHRText.setText(sb.toString());
+        }
     }
     public class MessageReceiver extends BroadcastReceiver {
         @Override
@@ -195,7 +275,7 @@ public class MainActivity extends Activity implements SensorEventListener {
             {
                 Log.i("myTag", "Bearing=" + data);
                 mPOIBearing = Float.valueOf(data);
-                mBearingText.setText("(M)Bearing=" + data);
+                mDirectionText.setText("Bearing(M)=" + data);
             }
         }
     }
@@ -209,32 +289,19 @@ public class MainActivity extends Activity implements SensorEventListener {
 
             while(true)
             {
+                // compute POI degree relative to Compass
                 newDegree = mPOIBearing - mCompassBearing;
                 if (mCompassBearing < -360)
                 {
                     newDegree += 360;
                 }
-//                newDegree = lastDegree + 10;
-//                if (newDegree >= 360) {
-//                    newDegree = 0;
-//                }
-                //Log.i(TAG, "lastDegree=" + lastDegree + " ,newDegree=" + newDegree);
-                final RotateAnimation rotate = new RotateAnimation((float) lastDegree, (float) newDegree,
-                        RotateAnimation.RELATIVE_TO_SELF, 0.5f,
-                        RotateAnimation.RELATIVE_TO_SELF, 0.5f);
-                rotate.setDuration(100);
-                rotate.setFillEnabled(true);
-                rotate.setFillAfter(true);
-
-                lastDegree = newDegree;
-
-                runOnUiThread(new Runnable() {
-                    public void run() {
-                        mDirectionDial.startAnimation(rotate);
-                    }
-                });
-
-                SystemClock.sleep(500);
+                // Update direction dial
+                Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.direction_dial_fragment);
+                if (fragment != null && (fragment instanceof DirectionDialFragment))
+                {
+                    ((DirectionDialFragment) fragment).updateDirectionDial(lastDegree, newDegree);
+                }
+                SystemClock.sleep(1000);
             }
         }
     }

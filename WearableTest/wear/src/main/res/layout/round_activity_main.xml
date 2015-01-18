@@ -5,15 +5,13 @@
                 android:layout_height="match_parent"
                 tools:context=".MainActivity"
                 tools:deviceIds="wear_round">
-
-    <ImageView
-        android:id="@+id/directionDial"
-        android:layout_width="195dp"
-        android:layout_height="195dp"
-        android:layout_centerInParent="true"
-        android:src="@drawable/backgroundo"/>
+    <FrameLayout
+        android:id="@+id/direction_dial_fragment"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"/>
     <TextView
-        android:id="@+id/text"
+        android:id="@+id/compass"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
@@ -24,21 +22,21 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_above="@id/text"
+        android:layout_above="@id/compass"
         android:text="version"/>
     <TextView
-        android:id="@+id/bearing"
+        android:id="@+id/direction"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@id/text"
-        android:text="bearing"/>
+        android:layout_below="@id/compass"
+        android:text="direction"/>
     <TextView
         android:id="@+id/distance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_below="@id/bearing"
+        android:layout_below="@id/direction"
         android:text="heart rate"/>
     <TextView
         android:id="@+id/heart_rate"
